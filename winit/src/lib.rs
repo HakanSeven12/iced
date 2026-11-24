@@ -1074,9 +1074,6 @@ async fn run_instance<P>(
 
                         let mut uis_stale = false;
 
-                        // The windows that had input in this batch.
-                        let active: Vec<window::Id> = events.iter().map(|(id, _)| *id).collect();
-
                         for (id, window) in window_manager.iter_mut() {
                             let interact_span = debug::interact(id);
                             let mut window_events = vec![];
@@ -1188,24 +1185,8 @@ async fn run_instance<P>(
                                 );
                             }
 
-                            // Redraw at once the windows that had input, and the
-                            // first (main) window, which also shows what tasks and
-                            // subscriptions change. Every other window catches up
-                            // a little later: presenting each surface waits for the
-                            // display, so redrawing all of them on every mouse move
-                            // halved the main window's frame rate while a second
-                            // window was open.
-                            let main = window_manager.first_id();
-                            let deferred = Instant::now() + std::time::Duration::from_millis(50);
-
-                            for (id, window) in window_manager.iter_mut() {
-                                if uis_stale || Some(id) == main || active.contains(&id) {
-                                    window.raw.request_redraw();
-                                } else {
-                                    window.redraw_at = Some(
-                                        window.redraw_at.map_or(deferred, |at| at.min(deferred)),
-                                    );
-                                }
+                            for (_id, window) in window_manager.iter_mut() {
+                                window.raw.request_redraw();
                             }
                         }
 

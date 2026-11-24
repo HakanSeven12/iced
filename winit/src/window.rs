@@ -114,10 +114,6 @@ where
             .min()
     }
 
-    pub fn first_id(&self) -> Option<Id> {
-        self.entries.first_key_value().map(|(id, _window)| *id)
-    }
-
     pub fn first(&self) -> Option<&Window<P, C>> {
         self.entries.first_key_value().map(|(_id, window)| window)
     }
