@@ -1073,6 +1073,8 @@ async fn run_instance<P>(
                         }
 
                         let mut uis_stale = false;
+                        // Windows that received input in this batch.
+                        let mut input_windows: Vec<window::Id> = Vec::new();
 
                         for (id, window) in window_manager.iter_mut() {
                             let interact_span = debug::interact(id);
@@ -1090,6 +1092,8 @@ async fn run_instance<P>(
                             if window_events.is_empty() {
                                 continue;
                             }
+
+                            input_windows.push(id);
 
                             let (ui_state, statuses) = user_interfaces
                                 .get_mut(&id)
@@ -1185,8 +1189,37 @@ async fn run_instance<P>(
                                 );
                             }
 
-                            for (_id, window) in window_manager.iter_mut() {
+                            // Windows repaints arrive as WM_PAINT, which is only
+                            // delivered when no input is queued. Asking every
+                            // window for a repaint on every message lets one
+                            // window take every WM_PAINT while the pointer moves
+                            // over another, which then stops drawing until the
+                            // input pauses. Repaint the windows that got input
+                            // now; the others once the input has paused for
+                            // 120 ms (every repaint of theirs is a frame the
+                            // window under the pointer does not get).
+                            let now = Instant::now();
+                            let deferred = now + std::time::Duration::from_millis(120);
+
+                            for (id, window) in window_manager.iter_mut() {
+                                if input_windows.is_empty() || input_windows.contains(&id) {
+                                    window.raw.request_redraw();
+                                } else {
+                                    window.redraw_at = Some(deferred);
+                                }
+                            }
+                        }
+
+                        // A deadline can pass while input keeps the loop busy
+                        // (no ResumeTimeReached then): honour it here.
+                        let now = Instant::now();
+
+                        for (_id, window) in window_manager.iter_mut() {
+                            if let Some(redraw_at) = window.redraw_at
+                                && redraw_at <= now
+                            {
                                 window.raw.request_redraw();
+                                window.redraw_at = None;
                             }
                         }
 
